@@ -41,6 +41,30 @@ After stop, /reload or log out normally to flush WaypointProbeDB to WTF/Account/
 7. Record client version/build, EUI version, scenario, available/missing getters, returned states, and any errors. Compare the active target type with quest IDs and placed pins: those fields may describe inactive data.
 8. Repeat on each intended client. Combat-time behavior and taint testing remain a later phase.
 
+## Retail world-quest and POI test matrix
+
+Run each destination twice: **A: explicitly track the world quest/quest POI**, then **B: place and explicitly track a manual pin at the same destination**. Keep the runs separate; identical destinations do not imply identical routing data.
+
+| Scenario | Observation prototype checks | Later arrow acceptance |
+| --- | --- | --- |
+| Current-zone world quest | Active target kind, available distance, next waypoint and position while moving/turning and approaching | Correct direction/distance and arrival appearance |
+| Adjacent-zone world quest | Capture before the border, at crossing, and after transition; note map IDs and waypoint changes | Guidance updates across the boundary without stale direction |
+| Destination requiring a portal, boat, or other transport | Record whether Blizzard supplies an intermediate waypoint/instruction; capture before travel and after loading/arrival | Follow the supplied next step; hide gracefully if routing data is unavailable |
+| Cave entrance or different map floor | Compare entrance/intermediate waypoint with final objective and current floor/map | Guide toward the appropriate supplied waypoint; avoid misleading floor/entrance directions |
+| Switch or clear tracked target | Switch quest-to-quest, quest-to-pin, pin-to-quest, and clear tracking; inspect the next sample | Display changes or hides promptly with no stale labels/direction |
+| Target with no usable routing data | Note missing/nil/error/restricted getters and invalid/disabled native navigation | Hide directional guidance rather than infer a route |
+
+For each run record:
+- Scenario ID, A/B target mode, client version/build, addon revision, EUI version, quest ID (where applicable), destination coordinates/map, and starting map.
+- What Blizzard's own navigation displays, the observed next waypoint, distance/state, and any intermediate instruction.
+- Samples before/after each zone boundary, portal/transport leg, floor change, target replacement/removal, and arrival.
+- Actual versus expected behavior, errors, and result: **not run**, **pass**, **fail**, or **blocked**. Missing native routing is a documented coverage limit, not automatically a plugin defect.
+- Save named copies of the SavedVariables batch per scenario/run after stopping and reloading; preserve earlier files before starting a new batch. The rolling buffer holds 40 samples (about 80 seconds at the polling rate, less with events), so use short captures around transitions.
+
+The current prototype captures C_Navigation.GetNextWaypointForMap but does not yet collect C_QuestLog.GetNextWaypointText or render an arrow. Record native instruction text manually for now; direction/arrival/visual checks remain pending until rendering exists. Do not mark them passed from observation logs alone.
+
+Develop against one shared API implementation on Retail first. Ellesmere reports Retail and Forever APIs are the same; treat that as the working assumption and verify behavior on Forever when available. Forever in-game testing is **blocked until after November 4, 2026**, because its beta has ended.
+
 ## What is measured
 
 Active tracking kind/name, quest and user-waypoint tracking flags, quest ID, native navigation distance/state/screen validity, current map, next waypoint for that map, player map position, map world size, player facing, and separately the placed map pin.
