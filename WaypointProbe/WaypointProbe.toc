@@ -1,0 +1,8 @@
+## Interface: 120100, 120105, 16001
+## Title: Waypoint Probe
+## Notes: Read-only navigation data observation prototype
+## Author: Almightree
+## Version: 0.0.1
+## SavedVariables: WaypointProbeDB
+
+WaypointProbe.lua
