@@ -10,6 +10,8 @@ This is a diagnostic addon, not the navigation arrow or finished EUI plugin. It 
 - Match documentation to the tested client/build. WoW Forever must be verified against its own shipped APIs; Retail source does not prove compatibility.
 - Battle.net web APIs are outside this addon's in-game navigation scope.
 
+- Supplementary reference/tooling: [wowlua](https://wowlua.dev/) provides typed Lua tooling, an API reference, and an emulated WoW test environment. Its site currently describes the browsable API reference as camelot-focused, with Retail and Classic Era coming; check actual per-flavor coverage before relying on it. API descriptions may include project-authored text, and emulator behavior can be implemented, recorded, guessed, or unimplemented. Use it to aid development, not as a replacement for Blizzard's client-shipped documentation or in-game validation. Adding this reference does not adopt its compiler/framework or change the plain-Lua prototype.
+
 ## Install
 
 Copy the repository's **WaypointProbe** folder to your game's Interface/AddOns folder, then restart/reload the client. The folder must contain WaypointProbe.toc and WaypointProbe.lua directly.
