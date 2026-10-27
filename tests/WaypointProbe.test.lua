@@ -10,6 +10,16 @@ local secret = {}
 function issecretvalue(value) return value == secret end
 function GetTime() return 1 end
 function GetBuildInfo() return "test", "123", "date" end
+local flying, mounted = false, true
+function IsFlying(unit) assert(unit == "player"); return flying end
+function IsMounted() return mounted end
+local arrowVisible, arrowReason = false, "player_position_missing"
+local diagnosticReads = 0
+AlmightreeWaypointDiagnostics = {
+    GetArrowState = function() diagnosticReads = diagnosticReads + 1; return arrowVisible, arrowReason, true end,
+    GetTarget = function() return "quest:101", "objective" end,
+    GetUpdatedAt = function() return .75 end,
+}
 SlashCmdList = {}
 local output = {}
 function print(message) output[#output + 1] = message end
@@ -46,8 +56,29 @@ assert(calls == 3)
 assert(last().questNextWaypoint[1] == 77 and last().questNextWaypoint[3] == .4)
 assert(last().questNextWaypointForMap[1] == .5)
 assert(last().questNextWaypointText[1] == "Take |portal")
+assert(last().flying[1] == false and last().mounted[1] == true)
+assert(last().arrowState[1] == false and last().arrowState[2] == "player_position_missing" and last().arrowState[3] == true)
+assert(last().arrowTarget[1] == "quest:101" and last().arrowTarget[2] == "objective")
+assert(last().arrowUpdatedAt[1] == .75)
 command("dump")
 assert(table.concat(output, "\n"):find("questNextWaypointText: ok Take ||portal", 1, true))
+assert(table.concat(output, "\n"):find("arrowState: ok false, player_position_missing, true", 1, true))
+arrowVisible, arrowReason, flying = true, "visible", true
+command("sample"); assert(last().arrowState[1] == true and last().flying[1] == true)
+local bridge = AlmightreeWaypointDiagnostics
+AlmightreeWaypointDiagnostics = nil; command("sample"); assert(last().arrowState.status == "missing")
+AlmightreeWaypointDiagnostics = { GetArrowState = function() error("unavailable") end }
+command("sample"); assert(last().arrowState.status == "error")
+AlmightreeWaypointDiagnostics = { GetArrowState = function() return secret, secret end }
+flying, mounted = secret, secret
+command("sample")
+assert(last().arrowState[1] == "<restricted>" and last().flying[1] == "<restricted>" and last().mounted[1] == "<restricted>")
+AlmightreeWaypointDiagnostics, flying, mounted = bridge, false, true
+local savedFlying, savedMounted = IsFlying, IsMounted
+IsFlying, IsMounted = nil, nil; command("sample")
+assert(last().flying.status == "missing" and last().mounted.status == "missing")
+IsFlying = function() error("unavailable") end; command("sample"); assert(last().flying.status == "error")
+IsFlying, IsMounted = savedFlying, savedMounted
 
 command("start")
 event("SUPER_TRACKING_CHANGED")
@@ -209,9 +240,10 @@ assert(count() == before) -- The previous session's pending capture was discarde
 event("SUPER_TRACKING_PATH_UPDATED")
 command("start"); before = count(); tick(.3); assert(count() == before)
 event("SUPER_TRACKING_CHANGED")
-combat = true; before = count(); local printed = #output
+combat = true; before = count(); local printed = #output; local readsBeforeCombat = diagnosticReads
 tick(.25); event("SUPER_TRACKING_PATH_UPDATED"); command("dump"); tick(2)
 assert(count() == before and #output == printed)
+assert(diagnosticReads == readsBeforeCombat)
 combat = false
 tick(.3); assert(count() == before) -- Combat-suppressed follow-ups do not leak later.
 tick(2); assert(last().reason == "poll")

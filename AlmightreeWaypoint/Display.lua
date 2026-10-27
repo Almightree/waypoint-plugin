@@ -32,6 +32,7 @@ function A.NewDisplay(db)
     local instruction = label(-112, 40, 12)
     local fonts = { destination, distance, instruction }
     local skin
+    local hideReason, renderedKey, renderedSource, updatedAt = "not_initialized"
 
     function V:ApplyLooks()
         local enabled = skin and skin.IsEnabled()
@@ -92,7 +93,10 @@ function A.NewDisplay(db)
         return (N.Text(text) or ""):gsub("|", "||")
     end
 
-    function V:Render(model)
+    function V:Render(model, reason)
+        updatedAt = N.Read(_G, "GetTime")[1]
+        renderedKey, renderedSource = model and model.key, model and (model.preview and "preview" or model.source)
+        hideReason = reason or (model and model.hideReason) or "no_model"
         -- Clear text/rotation visibility even when hiding; no previous target is retained.
         arrow:Hide()
         destination:SetText("")
@@ -101,7 +105,8 @@ function A.NewDisplay(db)
         if not model then frame:Hide(); return end
         destination:SetText(plain(model.destination))
         instruction:SetText(plain(model.instruction))
-        if N.Number(model.rotation) then arrow:SetRotation(model.rotation); arrow:Show() end
+        if N.Number(model.rotation) then arrow:SetRotation(model.rotation); arrow:Show(); hideReason = nil
+        elseif not reason and not model.hideReason then hideReason = "bearing_unavailable" end
         if N.Number(model.distance) and model.distance >= 0 then
             distance:SetText((model.preview and "Preview: " or "Straight-line: ~") .. string.format("%.0f yd", model.distance))
         elseif not model.preview then
@@ -109,6 +114,15 @@ function A.NewDisplay(db)
         end
         frame:Show()
     end
+
+    -- Read the actual owned texture's visibility; diagnostics never recalculate navigation.
+    function V:GetArrowState()
+        local visible = arrow:IsVisible() == true
+        return visible, visible and "visible" or hideReason or "texture_or_parent_hidden", frame:IsVisible() == true
+    end
+
+    function V:GetTarget() return renderedKey, renderedSource end
+    function V:GetUpdatedAt() return updatedAt end
 
     function V:RegisterSkin(eui)
         if not eui or not eui.RegisterSkin then return end

@@ -12,35 +12,43 @@ function A.NewController(api, driver, view, db)
     local C = { enabled = false, generation = 0, preview = false, model = nil }
     local elapsed, pending = 0, false
     local key, waitingForWorld
-    local function combat()
-        return N.Read(api, "InCombatLockdown")[1] ~= false
+    local function suppressed()
+        if not C.enabled then return "disabled" end
+        if waitingForWorld then return "loading_screen" end
+        local row = N.Read(api, "InCombatLockdown")
+        if row.status ~= "ok" then return "combat_status_" .. row.status end
+        if row[1] == true then return "combat_suppressed" end
+        if row[1] ~= false then return "combat_status_invalid" end
     end
 
-    function C:Invalidate()
+    function C:Invalidate(reason)
+        self.hideReason = reason or "invalidated"
         self.generation = self.generation + 1
         self.model, key = nil, nil
         elapsed, pending = 0, false
         driver:SetScript("OnUpdate", nil)
-        view:Render(nil)
+        view:Render(nil, self.hideReason)
     end
 
     function C:Render()
-        if not self.enabled or combat() or waitingForWorld then view:Render(nil); return end
+        local reason = suppressed()
+        if reason then view:Render(nil, reason); return end
         if self.preview or not db.locked then
             view:Render({ preview = true, destination = "Waypoint preview", instruction = "Drag when unlocked /atway lock",
                 distance = 125, rotation = -math.pi / 4 })
         else
-            view:Render(self.model)
+            view:Render(self.model, self.model and self.model.hideReason or self.hideReason)
         end
     end
 
     function C:Refresh()
-        if not self.enabled or combat() or waitingForWorld then self:Invalidate(); return end
+        local reason = suppressed()
+        if reason then self:Invalidate(reason); return end
         if self.preview or not db.locked then self:Render(); return end
-        local ok, target = pcall(N.Identity, api)
-        if not ok or not target then self:Invalidate(); return end
+        local ok, target, why = pcall(N.Identity, api)
+        if not ok or not target then self:Invalidate(ok and why or "identity_error"); return end
         if key ~= target.key then
-            self:Invalidate()
+            self:Invalidate("target_changed_pending")
             key = target.key
             pending = true
             self:RunUpdates()
@@ -51,17 +59,18 @@ function A.NewController(api, driver, view, db)
         -- Re-read identity after collecting data; never publish a mixed-target snapshot.
         local identityOK, current = pcall(N.Identity, api)
         if generation ~= self.generation or not self.enabled then return end
-        if not identityOK or not current or current.key ~= key then self:Invalidate(); self:Queue(); return end
+        if not identityOK or not current or current.key ~= key then self:Invalidate("identity_changed_during_capture"); self:Queue(); return end
         self.model = success and model or nil
+        self.hideReason = success and model and model.hideReason or (not success and "capture_error" or nil)
         self:Render()
         -- A target with no usable coordinates still refreshes at a lower rate for route readiness.
         self:RunUpdates()
     end
 
     function C:RunUpdates()
-        if not self.enabled or self.preview or not db.locked or combat() or waitingForWorld then return end
+        if self.preview or not db.locked or suppressed() then return end
         driver:SetScript("OnUpdate", function(_, delta)
-            if not C.enabled or waitingForWorld then C:Invalidate(); return end
+            if not C.enabled or waitingForWorld then C:Invalidate(suppressed()); return end
             if not N.Number(delta) or delta < 0 then return end
             elapsed = elapsed + delta
             local interval = pending and 0.25 or (C.model and C.model.rotation and 0.1 or 0.5)
@@ -73,14 +82,17 @@ function A.NewController(api, driver, view, db)
     end
 
     function C:Queue()
-        if not self.enabled or combat() or waitingForWorld then return end
+        local reason = suppressed()
+        if reason then view:Render(nil, reason); return end
         if self.preview or not db.locked then self:Render(); return end
+        self.hideReason = "refresh_pending"
+        view:Render(nil, self.hideReason)
         pending = true
         self:RunUpdates()
     end
 
     function C:SetEnabled(value)
-        self:Invalidate()
+        self:Invalidate("settings_changed")
         self.enabled, db.enabled = value == true, value == true
         driver:UnregisterAllEvents()
         if self.enabled then
@@ -110,8 +122,8 @@ function A.NewController(api, driver, view, db)
 
     driver:SetScript("OnEvent", function(_, event)
         if not C.enabled then return end
-        C:Invalidate() -- Clear every displayed field before any fresh read or delayed work.
-        if event == "PLAYER_LEAVING_WORLD" then waitingForWorld = true; return end
+        C:Invalidate("refresh_pending") -- Clear every displayed field before any fresh read or delayed work.
+        if event == "PLAYER_LEAVING_WORLD" then waitingForWorld = true; C:Invalidate("loading_screen"); return end
         if event == "PLAYER_ENTERING_WORLD" then waitingForWorld = false end
         C:Queue()
     end)

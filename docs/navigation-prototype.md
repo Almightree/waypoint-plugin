@@ -67,6 +67,8 @@ Run out of combat on Retail first, with script errors visible. Keep named probe 
 
 ## Automated checks and sources
 
+For disappearing guidance, use the companion probe's [visibility and movement diagnostics](data-observation.md#arrow-visibility-and-movement-diagnostics). The arrow exposes a read-only renderer-state bridge with actual texture visibility, the current hide reason, rendered target/source, and last render time. The probe adds flying/mounted state without changing visibility rules. Update both addon folders; absent/outdated bridge support is recorded as missing rather than hidden.
+
 From the repository root, run `lua tests/run.lua` with a Lua interpreter, or `fengari tests/run.lua` with Fengari. The current run passed under **Fengari / Lua 5.3 semantics**. WoW embeds a different runtime and UI; these checks do not execute inside it.
 
 - `Navigation.test.lua`: cardinal/aspect-ratio math, player-facing subtraction, finite/restricted input validation, map mismatch, coincident points, active-type precedence, pins, quest travel/objective selection, observed coordinate fixtures, remote/unknown travel blocking, missing/error/restricted APIs, instructions without a usable map, Area POIs, switching/removal, generation invalidation, combat/loading suppression, stop/idle/preview behavior, and never reading native distance.

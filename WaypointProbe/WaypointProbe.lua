@@ -93,6 +93,11 @@ local function sample(reason)
         navigationState = read(C_Navigation, "GetTargetState"),
         screenPositionValid = read(C_Navigation, "HasValidScreenPosition"),
         facing = read(_G, "GetPlayerFacing"),
+        flying = read(_G, "IsFlying", "player"),
+        mounted = read(_G, "IsMounted"),
+        arrowState = read(AlmightreeWaypointDiagnostics, "GetArrowState"),
+        arrowTarget = read(AlmightreeWaypointDiagnostics, "GetTarget"),
+        arrowUpdatedAt = read(AlmightreeWaypointDiagnostics, "GetUpdatedAt"),
         map = read(C_Map, "GetBestMapForUnit", "player"),
     }
     local mapID = s.map[1]
@@ -231,7 +236,8 @@ SlashCmdList.WAYPOINTPROBE = function(message)
             "questNextWaypointText", "playerPosition", "facing", "placedPin",
             "mapPinTracked", "trackedMapPin", "questPOIPosition",
             "taskQuestPOIPosition", "taskQuestLocation", "taskQuestZone", "taskQuestZoneLocation",
-            "questPOIPositionInTaskZone", "taskQuestPOIPositionInTaskZone", "areaPOIPosition" }
+            "questPOIPositionInTaskZone", "taskQuestPOIPositionInTaskZone", "areaPOIPosition",
+            "flying", "mounted", "arrowState", "arrowTarget", "arrowUpdatedAt" }
         for _, key in ipairs(keys) do
             local row = last[key]
             if row then

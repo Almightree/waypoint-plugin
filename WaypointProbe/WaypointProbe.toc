@@ -4,5 +4,6 @@
 ## Author: Almightree
 ## Version: 0.0.1
 ## SavedVariables: WaypointProbeDB
+## OptionalDeps: AlmightreeWaypoint
 
 WaypointProbe.lua

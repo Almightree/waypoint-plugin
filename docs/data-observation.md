@@ -36,6 +36,45 @@ Recording starts disabled, does not resume after reload, and skips samples and c
 
 After stop, /reload or log out normally to flush WaypointProbeDB to WTF/Account/<account>/SavedVariables/WaypointProbe.lua. The data may include quest/destination names and map coordinates; review it before sharing.
 
+## Arrow visibility and movement diagnostics
+
+Update **both** addon folders to capture the visible prototype's state alongside navigation data. The probe has an optional dependency on AlmightreeWaypoint for load order; it still works by itself. Every snapshot, including immediate and settled captures, now saves these fields, and `/wpprobe dump` prints them:
+
+| Field | Values |
+| --- | --- |
+| `arrowState` | `(arrowVisible, visibilityReason, panelVisible)`; visibility is read from the actual addon-owned texture/frame with `IsVisible()`, including parent visibility |
+| `arrowTarget` | `(renderedTargetKey, selectedSource)`; sources include `pin`, `travel`, `objective`, `poi`, or synthetic `preview` |
+| `arrowUpdatedAt` | `GetTime()` at the last render/clear; compare with the sample's `time` to identify an older display state |
+| `flying` | `IsFlying("player")` |
+| `mounted` | `IsMounted()` |
+
+The optional read-only `AlmightreeWaypointDiagnostics` bridge reports renderer state; the probe does not inspect frames, rerun the arrow's selection logic, or infer visibility from raw navigation data. A visible arrow reports `visible`. A hidden arrow reports the exact code path that hid it, while `panelVisible=true` can distinguish text-only guidance from a fully hidden display. `IsVisible()` describes UI visibility, not pixel occlusion or another window covering the arrow. A parent becoming hidden without another render can change actual visibility while leaving `arrowUpdatedAt` unchanged.
+
+Representative reasons:
+
+| Reason | Meaning |
+| --- | --- |
+| `no_tracking` | Blizzard reported no active tracking |
+| `tracking_missing`, `tracking_error`, `tracking_restricted`, `quest_id_invalid`, `unsupported_tracking_type` | Identity could not be established; not the same as confirmed tracking removal |
+| `disabled`, `combat_suppressed`, `loading_screen` | A display/lifecycle rule suppressed the arrow |
+| `refresh_pending`, `target_changed_pending` | Previous data was invalidated and a fresh capture is pending |
+| `player_map_nil`, `player_map_restricted`, `map_mismatch` | No valid shared coordinate map |
+| `quest_poi_no_match`, `quest_poi_map_mismatch`, `quest_poi_coordinates_invalid` | The objective lookup did not supply an appropriate coordinate |
+| `player_position_missing`, `player_position_restricted`, `map_dimensions_invalid`, `facing_invalid` | A required direction input failed validation |
+| `travel_step_other_map`, `travel_instruction_without_coordinates` | A known travel step blocks direct objective guidance |
+| `quest_travel_missing`, `native_travel_restricted` | Travel API unavailable/unsafe; objective fallback is deliberately blocked |
+| `coincident_coordinates` | Distance can be zero, but no bearing is defined; this is not arrival detection |
+| `capture_error`, `identity_error` | Protected evaluation failed; error text is not persisted |
+| `texture_or_parent_hidden` | A valid bearing was rendered, but the texture or its parent is now hidden |
+
+Additional input-specific reasons follow the same naming scheme. Getter failures preserve `missing`, `error`, and `restricted`; successful getters with unusable values report `nil`, `false`, or `invalid` where applicable. Only the first failing validation/selection rule is reported, not a guess about the underlying game condition. Flying/mounted flags are observations and do not introduce any new visibility rule.
+
+Without the arrow addon, before its initialization, or with an older version lacking the bridge, arrow diagnostic fields have `status=missing`, not `arrowVisible=false`. Getter exceptions and restricted values use the same markers as other probe fields. Probe combat suppression and its 40-sample bound are unchanged: no samples are taken during combat, even though the renderer can record a combat-suppression reason internally.
+
+To investigate disappearing guidance, start a short capture, acquire a working target, mount/dismount, take off/land, then switch and clear targets. Take a manual snapshot/dump while the problem is visible and compare `arrowState`, `arrowTarget`, `arrowUpdatedAt`, tracking, coordinates, flying, and mounted. Also sample with `/atway disable` and re-enable; expect `disabled`, followed by pending/visible or the actual input failure. Immediate event handlers can run in different orders across addons; the arrow fields are its live state at sampling time, not an atomic post-event snapshot. Compare the settled sample and render timestamp before attributing a mismatch to stale tracking. Save the batch before the rolling buffer overwrites it.
+
+Signatures were checked against Blizzard's generated [Unit documentation](https://github.com/Gethe/wow-ui-source/blob/live/Interface/AddOns/Blizzard_APIDocumentationGenerated/UnitDocumentation.lua) (`IsFlying` accepts an optional unit and returns boolean) and [PlayerScript documentation](https://github.com/Gethe/wow-ui-source/blob/live/Interface/AddOns/Blizzard_APIDocumentationGenerated/PlayerScriptDocumentation.lua) (`IsMounted` returns boolean). In-game behavior of the added diagnostics remains pending.
+
 ## Test sequence
 
 1. Clear samples. With no tracked destination, take a sample and dump it.

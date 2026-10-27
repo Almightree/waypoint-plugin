@@ -4,6 +4,8 @@ local secret = {}
 function issecretvalue(v) return rawequal(v, secret) end
 local combat = false
 function InCombatLockdown() return combat end
+local now = 10
+function GetTime() return now end
 STANDARD_TEXT_FONT = "fallback-font"
 SlashCmdList = {}
 local created = {}
@@ -35,6 +37,7 @@ function F:Hide()
     if self.shown then self.shown = false; if self.scripts.OnHide then self.scripts.OnHide(self) end end
 end
 function F:Show() self.shown = true end
+function F:IsVisible() return self.shown and (not self.parent or self.parent:IsVisible()) end
 function F:SetShown(v) if v then self:Show() else self:Hide() end end
 function F:SetSize(w,h) self.w,self.h = w,h end
 function F:SetPoint(...) self.point = {...} end
@@ -77,8 +80,25 @@ V:Render({ destination = "Quest |link", instruction = "Take |portal", rotation =
 assert(V.frame.shown and arrow.shown and arrow.rotation == -.5)
 assert(destination.text == "Quest ||link" and instruction.text == "Take ||portal")
 assert(distance.text == "Straight-line: ~25 yd")
+local visible, why, panel = V:GetArrowState()
+assert(visible and why == "visible" and panel)
+assert(V:GetUpdatedAt() == 10)
+UIParent:Hide()
+visible, why, panel = V:GetArrowState()
+assert(not visible and why == "texture_or_parent_hidden" and not panel)
+UIParent:Show()
 V:Render({ destination = "Quest", instruction = "Take portal" })
 assert(not arrow.shown and instruction.text == "Take portal" and distance.text == "Direction unavailable")
+visible, why, panel = V:GetArrowState()
+assert(not visible and why == "bearing_unavailable" and panel)
+V:Render({ destination = "Quest", hideReason = "player_position_missing", key = "quest:88994", source = "objective" })
+visible, why, panel = V:GetArrowState()
+assert(not visible and why == "player_position_missing" and panel)
+local key, source = V:GetTarget(); assert(key == "quest:88994" and source == "objective")
+now = 11
+V:Render(nil, "disabled")
+visible, why, panel = V:GetArrowState(); assert(not visible and why == "disabled" and not panel)
+assert(V:GetUpdatedAt() == 11 and V:GetTarget() == nil)
 V:Render(nil)
 assert(not V.frame.shown and not arrow.shown and destination.text == "" and instruction.text == "" and distance.text == "")
 db.locked = false; V:SetLocked(false); V:Render({ preview = true })
@@ -148,4 +168,7 @@ local driver = created[#created]
 assert(AlmightreeWaypointDB.enabled and driver.scripts.OnUpdate)
 driver.scripts.OnUpdate(driver, .5)
 assert(driver.scripts.OnUpdate == nil) -- No selected target in this mock runtime.
+visible, why, panel = AlmightreeWaypointDiagnostics.GetArrowState()
+assert(not visible and why == "tracking_missing" and not panel)
+assert(AlmightreeWaypointDiagnostics.GetUpdatedAt() == 11 and driver.scripts.OnUpdate == nil)
 io.write("Display and public EUI contract tests passed\n")
