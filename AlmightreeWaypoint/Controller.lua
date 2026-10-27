@@ -8,9 +8,14 @@ local events = {
     "PLAYER_REGEN_DISABLED", "PLAYER_REGEN_ENABLED",
 }
 
+local contextChanges = {
+    PLAYER_ENTERING_WORLD = true, ZONE_CHANGED_NEW_AREA = true, ZONE_CHANGED = true,
+    PLAYER_REGEN_ENABLED = true,
+}
+
 function A.NewController(api, driver, view, db)
     local C = { enabled = false, generation = 0, preview = false, model = nil }
-    local elapsed, pending = 0, false
+    local elapsed, pending, refreshQueued = 0, false, false
     local key, waitingForWorld
     local function suppressed()
         if not C.enabled then return "disabled" end
@@ -25,7 +30,7 @@ function A.NewController(api, driver, view, db)
         self.hideReason = reason or "invalidated"
         self.generation = self.generation + 1
         self.model, key = nil, nil
-        elapsed, pending = 0, false
+        elapsed, pending, refreshQueued = 0, false, false
         driver:SetScript("OnUpdate", nil)
         view:Render(nil, self.hideReason)
     end
@@ -73,9 +78,10 @@ function A.NewController(api, driver, view, db)
             if not C.enabled or waitingForWorld then C:Invalidate(suppressed()); return end
             if not N.Number(delta) or delta < 0 then return end
             elapsed = elapsed + delta
-            local interval = pending and 0.25 or (C.model and C.model.rotation and 0.1 or 0.5)
+            local interval = pending and 0.25 or (refreshQueued and 0.1 or (C.model and C.model.rotation and 0.1 or 0.5))
             if elapsed < interval then return end
             elapsed = 0
+            refreshQueued = false
             if pending then pending = false end
             C:Refresh()
         end)
@@ -122,10 +128,37 @@ function A.NewController(api, driver, view, db)
 
     driver:SetScript("OnEvent", function(_, event)
         if not C.enabled then return end
-        C:Invalidate("refresh_pending") -- Clear every displayed field before any fresh read or delayed work.
         if event == "PLAYER_LEAVING_WORLD" then waitingForWorld = true; C:Invalidate("loading_screen"); return end
-        if event == "PLAYER_ENTERING_WORLD" then waitingForWorld = false end
-        C:Queue()
+        if event == "PLAYER_REGEN_DISABLED" then C:Invalidate("combat_suppressed"); return end
+        if contextChanges[event] then
+            if event == "PLAYER_ENTERING_WORLD" then waitingForWorld = false end
+            C:Invalidate("refresh_pending")
+            C:Queue()
+            return
+        end
+        local reason = suppressed()
+        if reason then C:Invalidate(reason); return end
+        if C.preview or not db.locked then C:Render(); return end
+
+        -- Check identity on every event, even during a coalesced refresh. A routine
+        -- path/POI notification is not evidence that the active target changed.
+        local ok, target, why = pcall(N.Identity, api)
+        if not ok or not target then C:Invalidate(ok and why or "identity_error"); return end
+        if key ~= target.key then
+            C:Invalidate("target_changed_pending")
+            key, pending = target.key, true
+            C:RunUpdates()
+            return
+        end
+
+        -- First event revalidates immediately, replacing the model only with fresh
+        -- data (including an unusable result). Further events share the next tick;
+        -- neither pending acquisition nor its elapsed time is reset by a burst.
+        if not pending and not refreshQueued then
+            refreshQueued = true
+            C:Refresh()
+        end
+        C:RunUpdates()
     end)
     return C
 end

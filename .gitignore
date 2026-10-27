@@ -39,3 +39,15 @@ luac.out
 *.x86_64
 *.hex
 
+# Local configuration files and tests
+*.local
+*.test
+*.tmp
+*.log
+*.cache
+*.bak
+*.swp
+*.swo
+probe_results/
+tests/
+tools/
