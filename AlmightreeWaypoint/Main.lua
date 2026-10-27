@@ -1,0 +1,15 @@
+local _, A = ...
+local loader = CreateFrame("Frame")
+loader:RegisterEvent("PLAYER_LOGIN")
+loader:SetScript("OnEvent", function()
+    loader:UnregisterAllEvents()
+    AlmightreeWaypointDB = A.Settings(AlmightreeWaypointDB)
+    local db = AlmightreeWaypointDB
+    local view = A.NewDisplay(db)
+    local driver = CreateFrame("Frame")
+    local controller = A.NewController(_G, driver, view, db)
+    view:RegisterSkin(EllesmereUI)
+    A.RegisterOptions(EllesmereUI, controller, view, db)
+    A.RegisterCommands(EllesmereUI, controller, view)
+    controller:SetEnabled(db.enabled)
+end)

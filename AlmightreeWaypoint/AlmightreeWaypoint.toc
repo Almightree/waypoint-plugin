@@ -1,0 +1,13 @@
+## Interface: 120100, 120105, 16001
+## Title: Almightree Waypoint
+## Notes: Read-only navigation arrow prototype for tracked pins and quests
+## Author: Almightree
+## Version: 0.1.0-prototype
+## OptionalDeps: EllesmereUI
+## SavedVariables: AlmightreeWaypointDB
+
+Navigation.lua
+Controller.lua
+Display.lua
+Options.lua
+Main.lua
