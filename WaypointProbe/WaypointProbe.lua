@@ -35,6 +35,30 @@ local function read(namespace, method, ...)
     return readProjected(namespace, method, nil, ...)
 end
 
+local contextFields = { "event", "time", "playerMap", "zone", "subzone", "realZone" }
+local resolutionFields = { "key", "source", "poiID", "localPOIStatus", "localPOIReason",
+    "eventMapStatus", "eventMap", "eventPOIStatus", "returnedPOIID", "eventIdentity", "eventMapValidation",
+    "playerMap", "targetMap", "targetX", "targetY", "coordinateSpace", "conversionAttempted", "conversionResult",
+    "playerWorldID", "targetWorldID", "unitWorldID", "playerWorldX", "playerWorldY",
+    "targetWorldX", "targetWorldY", "unitWorldX", "unitWorldY", "hideReason", "sequence", "time", "event" }
+local invalidationFields = { "sequence", "reason", "comparison", "changedFields", "oldKey", "newKey",
+    "old_kind", "old_trackingType", "old_mapPinType", "old_id", "old_mapID", "old_x", "old_y",
+    "new_kind", "new_trackingType", "new_mapPinType", "new_id", "new_mapID", "new_x", "new_y",
+    "event", "time", "playerMap", "zone", "subzone", "realZone" }
+
+local function readRecord(method, fields)
+    local namespace = AlmightreeWaypointDiagnostics
+    if type(namespace) ~= "table" or type(namespace[method]) ~= "function" then return { status = "missing" } end
+    local ok, result = pcall(function()
+        local record = namespace[method]()
+        if restricted(record) or type(record) ~= "table" then return { status = "ok", value = scalar(record) } end
+        local clean = { status = "ok" }
+        for _, field in ipairs(fields) do clean[field] = scalar(record[field]) end
+        return clean
+    end)
+    return ok and result or { status = "error" }
+end
+
 local function number(value)
     return not restricted(value) and type(value) == "number"
 end
@@ -95,9 +119,19 @@ local function sample(reason)
         facing = read(_G, "GetPlayerFacing"),
         flying = read(_G, "IsFlying", "player"),
         mounted = read(_G, "IsMounted"),
+        zone = read(_G, "GetZoneText"),
+        subzone = read(_G, "GetSubZoneText"),
+        realZone = read(_G, "GetRealZoneText"),
         arrowState = read(AlmightreeWaypointDiagnostics, "GetArrowState"),
         arrowTarget = read(AlmightreeWaypointDiagnostics, "GetTarget"),
         arrowUpdatedAt = read(AlmightreeWaypointDiagnostics, "GetUpdatedAt"),
+        arrowInvalidation = readRecord("GetLastInvalidation", invalidationFields),
+        arrowEvent = readRecord("GetLastEvent", contextFields),
+        arrowZoneEvent = readRecord("GetLastZoneEvent", contextFields),
+        arrowCoordinateSpace = read(AlmightreeWaypointDiagnostics, "GetCoordinateSpace"),
+        arrowWorldIDs = read(AlmightreeWaypointDiagnostics, "GetWorldIDs"),
+        arrowResolution = readRecord("GetResolution", resolutionFields),
+        arrowLastConversion = readRecord("GetLastConversion", resolutionFields),
         map = read(C_Map, "GetBestMapForUnit", "player"),
     }
     local mapID = s.map[1]
@@ -124,9 +158,17 @@ local function sample(reason)
     local areaType = Enum and Enum.SuperTrackingMapPinType and Enum.SuperTrackingMapPinType.AreaPOI
     if s.mapPinTracked.status == "ok" and s.mapPinTracked[1] == true
         and s.trackedMapPin.status == "ok" and number(pinType) and number(areaType)
-        and pinType == areaType and number(pinID) and pinID > 0
-        and s.map.status == "ok" and number(mapID) then
-        s.areaPOIPosition = readProjected(C_AreaPoiInfo, "GetAreaPOIInfo", areaPosition, mapID, pinID)
+        and pinType == areaType and number(pinID) and pinID > 0 then
+        if s.map.status == "ok" and number(mapID) then
+            s.areaPOIPosition = readProjected(C_AreaPoiInfo, "GetAreaPOIInfo", areaPosition, mapID, pinID)
+        end
+        -- Separate investigation: an event's reported map is not the task quest's map.
+        s.areaPOIEventMap = read(C_EventScheduler, "GetEventUiMapID", pinID)
+        s.areaPOIEventZone = read(C_EventScheduler, "GetEventZoneName", pinID)
+        local eventMap = s.areaPOIEventMap[1]
+        if s.areaPOIEventMap.status == "ok" and number(eventMap) and eventMap > 0 and eventMap % 1 == 0 then
+            s.areaPOIEventPosition = readProjected(C_AreaPoiInfo, "GetAreaPOIInfo", areaPosition, eventMap, pinID)
+        end
     end
     if s.map.status == "ok" and number(mapID) then
         s.nextWaypoint = read(C_Navigation, "GetNextWaypointForMap", mapID)
@@ -159,7 +201,7 @@ local events = {
     "SUPER_TRACKING_CHANGED", "SUPER_TRACKING_PATH_UPDATED",
     "USER_WAYPOINT_UPDATED", "NAVIGATION_DESTINATION_REACHED",
     "QUEST_POI_UPDATE", "AREA_POIS_UPDATED",
-    "PLAYER_ENTERING_WORLD", "ZONE_CHANGED_NEW_AREA", "PLAYER_REGEN_ENABLED",
+    "PLAYER_ENTERING_WORLD", "PLAYER_LEAVING_WORLD", "ZONE_CHANGED_NEW_AREA", "ZONE_CHANGED", "ZONE_CHANGED_INDOORS", "PLAYER_REGEN_ENABLED",
 }
 
 local function stop()
@@ -198,7 +240,8 @@ end
 frame:SetScript("OnEvent", function(_, event)
     if not enabled then return end
     sample(event)
-    if event == "SUPER_TRACKING_CHANGED" or event == "SUPER_TRACKING_PATH_UPDATED" then
+    if event == "SUPER_TRACKING_CHANGED" or event == "SUPER_TRACKING_PATH_UPDATED"
+        or event == "ZONE_CHANGED" or event == "ZONE_CHANGED_NEW_AREA" or event == "ZONE_CHANGED_INDOORS" then
         -- Coalesce bursts; the follow-up reads the current target, never cached IDs.
         pendingReason, pendingElapsed = event, 0
     end
@@ -237,7 +280,8 @@ SlashCmdList.WAYPOINTPROBE = function(message)
             "mapPinTracked", "trackedMapPin", "questPOIPosition",
             "taskQuestPOIPosition", "taskQuestLocation", "taskQuestZone", "taskQuestZoneLocation",
             "questPOIPositionInTaskZone", "taskQuestPOIPositionInTaskZone", "areaPOIPosition",
-            "flying", "mounted", "arrowState", "arrowTarget", "arrowUpdatedAt" }
+            "flying", "mounted", "zone", "subzone", "realZone", "arrowState", "arrowTarget", "arrowUpdatedAt",
+            "arrowCoordinateSpace", "arrowWorldIDs", "areaPOIEventMap", "areaPOIEventZone", "areaPOIEventPosition" }
         for _, key in ipairs(keys) do
             local row = last[key]
             if row then
@@ -247,6 +291,20 @@ SlashCmdList.WAYPOINTPROBE = function(message)
                     values[i] = tostring(scalar(row[i])):gsub("|", "||")
                 end
                 say(key .. ": " .. row.status .. " " .. table.concat(values, ", "))
+            end
+        end
+        for _, key in ipairs({ "arrowInvalidation", "arrowEvent", "arrowZoneEvent", "arrowResolution", "arrowLastConversion" }) do
+            local row = last[key]
+            if row then
+                say(key .. ": " .. row.status)
+                local fields = key == "arrowInvalidation" and invalidationFields
+                    or (key == "arrowResolution" or key == "arrowLastConversion") and resolutionFields or contextFields
+                if row.value ~= nil then say(key .. ".value: " .. tostring(scalar(row.value)):gsub("|", "||")) end
+                for _, field in ipairs(fields) do
+                    if row[field] ~= nil then
+                        say(key .. "." .. field .. ": " .. tostring(scalar(row[field])):gsub("|", "||"))
+                    end
+                end
             end
         end
     else

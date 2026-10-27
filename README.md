@@ -19,7 +19,7 @@ The plugin complements EUI's existing waypoint commands; it does not require tha
 ## Prototype behavior
 
 - Follow the active tracking type: tracked manual pins, quest travel waypoints, then verified current-map quest POIs when no travel step is exposed; tracked Area POIs are also handled.
-- Addon-owned arrow, destination, straight-line map distance, and available travel instruction. Hide direction without a valid shared map; keep useful text.
+- Addon-owned arrow, destination, straight-line distance, and available travel instruction. World quests and event POIs can use validated task-zone/event-map coordinates after verified world-space conversion; hide direction without a validated common space and keep useful text.
 - Independent saved position, scale, opacity, enable/disable, preview, and unlock/drag/lock/reset controls.
 - Public EUI plugin settings and resolved `eui`/`modern` skinning, with fallback styling. Fonts and accent follow EUI rather than a separate theme selector.
 - No arrival detection, tracking mutation, or pathfinding. Font/color overrides and arrival settings remain future work.
