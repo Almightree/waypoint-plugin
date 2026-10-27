@@ -89,12 +89,11 @@ combat = true; V.frame.scripts.OnDragStart(); assert(not V.frame.moving); combat
 V:ResetPosition(); assert(db.x == 0 and db.y == 180)
 
 local skinEnabled = true
-local shellFrame
 local S = {
     IsEnabled = function() return skinEnabled end,
     GetFont = function() return "eui-font", "OUTLINE" end,
     GetAccentColor = function() return .1, .2, .3 end,
-    Shell = function(f, opts) assert(opts.noTopBar); shellFrame = f end,
+    Shell = function() error("Navigation overlay must stay transparent") end,
     Font = function(fs) assert(fs.kind == "FontString") end,
 }
 local looks
@@ -106,12 +105,12 @@ local eui = {
 }
 V:RegisterSkin(eui)
 assert(registeredSkin and destination.font[1] == "eui-font" and arrow.color[1] == .1)
-assert(shellFrame.shown and shellFrame ~= V.frame)
+for _, f in ipairs(created) do assert(not f.backdrop) end
 -- EUI primitives resolve the style; our frames/position/settings survive appearance changes.
-looks(); assert(shellFrame.shown and db.y == 180)
+looks(); assert(db.y == 180)
 skinEnabled = false; looks()
-assert(not shellFrame.shown and destination.font[1] == "fallback-font")
-skinEnabled = true; looks(); assert(shellFrame.shown and destination.font[1] == "eui-font")
+assert(destination.font[1] == "fallback-font")
+skinEnabled = true; looks(); assert(destination.font[1] == "eui-font")
 
 local calls = {}
 local C = { preview = false }

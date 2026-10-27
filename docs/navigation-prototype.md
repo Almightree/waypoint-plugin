@@ -2,6 +2,8 @@
 
 `AlmightreeWaypoint` is a separate addon from `WaypointProbe`. It draws only in addon-owned frames, observes the player's active tracking type, and leaves all waypoint/super-tracking state alone. The probe remains available independently for diagnostic captures.
 
+The display is a transparent overlay: only the arrow and text are drawn, with no panel background or border, including with EUI skinning enabled. EUI still supplies the public font and accent styling.
+
 ## Install and controls
 
 1. Copy the repository's **AlmightreeWaypoint** folder to `<WoW>/Interface/AddOns/AlmightreeWaypoint`. Its TOC, Lua files, and `Arrow.tga` must be directly in that folder.

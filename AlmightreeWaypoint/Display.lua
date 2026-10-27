@@ -10,15 +10,7 @@ function A.NewDisplay(db)
     frame:SetMovable(true)
     frame:RegisterForDrag("LeftButton")
 
-    -- Separate shell frames prevent skin art removal from fading our arrow/text.
-    local fallback = CreateFrame("Frame", nil, frame, "BackdropTemplate")
-    fallback:SetAllPoints()
-    fallback:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
-    fallback:SetBackdropColor(0.035, 0.045, 0.06, 0.9)
-    fallback:SetBackdropBorderColor(0.25, 0.35, 0.4, 0.8)
-    local shell = CreateFrame("Frame", nil, frame)
-    shell:SetAllPoints()
-    shell:Hide()
+    -- Transparent overlay: EUI supplies fonts/accent, never window chrome.
     local content = CreateFrame("Frame", nil, frame)
     content:SetSize(300, 160)
     content:SetPoint("CENTER")
@@ -43,8 +35,6 @@ function A.NewDisplay(db)
 
     function V:ApplyLooks()
         local enabled = skin and skin.IsEnabled()
-        shell:SetShown(enabled == true)
-        fallback:SetShown(not enabled)
         local path, outline = STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF", ""
         local r, g, b = 0.2, 0.85, 0.75
         if enabled then
@@ -124,7 +114,6 @@ function A.NewDisplay(db)
         if not eui or not eui.RegisterSkin then return end
         eui.RegisterSkin("AlmightreeWaypoint", function(S)
             skin = S
-            S.Shell(shell, { noTopBar = true })
             for _, fs in ipairs(fonts) do S.Font(fs) end
             S.OnLooksChanged(function() V:ApplyLooks() end)
             V:ApplyLooks()
