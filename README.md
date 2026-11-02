@@ -41,6 +41,8 @@ Investigate WoW Forever and current Retail separately. Neither compatibility nor
 
 See [planning issue #1](https://github.com/Almightree/waypoint-plugin/issues/1) for the full scope, architecture, and acceptance checklist.
 
+For a proposed native implementation inside EllesmereUI, see the [upstream integration plan](docs/eui-native-integration-plan.md), including code placement, profiles, Unlock Mode, and upstream acceptance constraints.
+
 World-space markers, guide integrations, ETA, route queues, and upstream bundling are future possibilities.
 
 ## References
